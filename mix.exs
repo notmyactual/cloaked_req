@@ -31,15 +31,7 @@ defmodule CloakedReq.MixProject do
     [
       file: "AGENTS.md",
       usage_rules: [
-        # Inline: Phoenix rules essential for daily LiveView work
-        "phoenix:liveview",
-        "phoenix:elixir",
-        "phoenix:html",
-        # Link: remaining Phoenix sub-rules
-        {"phoenix:ecto", link: :markdown},
-        {"phoenix:phoenix", link: :markdown},
-        # Link: all other packages + their sub-rules
-        {~r/^(?!phoenix$).*/, link: :markdown}
+        {~r/.*/, link: :markdown}
       ]
     ]
   end
