@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -14,6 +17,7 @@ env:
 
 jobs:
   test:
+    if: github.event_name == 'push' || github.event.pull_request.user.login == github.repository_owner
     name: OTP ${{ matrix.otp }} / Elixir ${{ matrix.elixir }}
     runs-on: ubuntu-latest
     strategy:
@@ -24,19 +28,21 @@ jobs:
             elixir: "1.19"
             version-type: "loose"
           - otp: "28.3.3"
-            elixir: "1.20.0-rc.2"
+            elixir: "1.20.0-rc.3"
             version-type: "strict"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake golang-go
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: native/cloaked_req_native/target
           key: rust-${{ hashFiles('native/cloaked_req_native/Cargo.lock') }}
@@ -45,14 +51,14 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path native/cloaked_req_native/Cargo.toml
 
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@ee09b1e59bb240681c382eb1f0abc6a04af72764 # v1.23.0
         with:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
           version-type: ${{ matrix.version-type }}
 
       - name: Cache Elixir
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: |
             _build
@@ -62,7 +68,7 @@ jobs:
           restore-keys: mix-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-
 
       - name: Cache Dialyzer PLTs
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: priv/plts
           key: dialyzer-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
