@@ -1,0 +1,56 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@939ae9c056ecf8a1a01409ddd1c4eadec5f8c77b # v1.0.116
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request. Read AGENTS.md first to understand project rules.
+            The PR branch is already checked out in the current working directory.
+
+            Read the diff and the changed files with surrounding context. Use git blame/history when intent is unclear.
+
+            Flag only issues introduced by this PR in these categories:
+            - Logic errors that produce wrong results
+            - Security: injection, auth bypass, data exposure
+            - Breaking changes: removed exports, changed APIs, schema mismatches
+            - Missing imports, type errors, syntax errors
+            - Data integrity: silent data loss, unsafe retries, missing failure handling on critical paths
+            - Violations of rules in AGENTS.md (quote the exact rule)
+
+            Ignore: style, formatting, hypothetical edge cases, pre-existing issues, anything a linter catches.
+
+            Before reporting an issue, re-read the relevant code to confirm it is real. If unsure, skip it.
+
+            Posting:
+            - Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) for each issue, anchored to the offending line.
+            - If there are no issues, post a single top-level comment via `gh pr comment $PR_NUMBER --body "No issues found."`.
+            - Do not submit review text as your final message - only post GitHub comments.
+
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

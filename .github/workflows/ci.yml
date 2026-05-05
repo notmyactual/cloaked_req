@@ -27,8 +27,8 @@ jobs:
           - otp: "28"
             elixir: "1.19"
             version-type: "loose"
-          - otp: "28.3.3"
-            elixir: "1.20.0-rc.3"
+          - otp: "28"
+            elixir: "1.20.0-rc.4"
             version-type: "strict"
 
     steps:
@@ -37,12 +37,12 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake golang-go
 
-      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # stable
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
         with:
           toolchain: stable
 
       - name: Cache Rust
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: native/cloaked_req_native/target
           key: rust-${{ hashFiles('native/cloaked_req_native/Cargo.lock') }}
@@ -51,14 +51,17 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path native/cloaked_req_native/Cargo.toml
 
-      - uses: erlef/setup-beam@ee09b1e59bb240681c382eb1f0abc6a04af72764 # v1.23.0
+      - uses: erlef/setup-beam@fc68ffb90438ef2936bbb3251622353b3dcb2f93 # v1.24.0
+        env:
+          INSTALL_DIR_FOR_OTP: ${{ runner.tool_cache }}/setup-beam/otp-${{ matrix.otp }}
+          INSTALL_DIR_FOR_ELIXIR: ${{ runner.tool_cache }}/setup-beam/elixir-${{ matrix.elixir }}
         with:
           elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
           version-type: ${{ matrix.version-type }}
 
       - name: Cache Elixir
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             _build
@@ -66,13 +69,6 @@ jobs:
             ~/.mix
           key: mix-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}-${{ hashFiles('native/cloaked_req_native/Cargo.lock') }}
           restore-keys: mix-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-
-
-      - name: Cache Dialyzer PLTs
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: priv/plts
-          key: dialyzer-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: dialyzer-otp${{ matrix.otp }}-elixir${{ matrix.elixir }}-
 
       - name: Install dependencies
         run: |
