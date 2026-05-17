@@ -37,9 +37,12 @@ jobs:
       - name: Resolve release target
         id: resolve
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
             VERSION="${TAG#v}"
             SHOULD_RELEASE=true
           else
@@ -226,10 +229,12 @@ jobs:
           echo '}' >> "$FILE"
 
       - name: Commit and push checksum
+        env:
+          TAG: ${{ needs.detect.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add checksum-Elixir.CloakedReq.Native.exs
           git diff --cached --quiet && echo "No checksum changes" && exit 0
-          git commit -m "chore: update NIF checksum for ${{ needs.detect.outputs.tag }}"
+          git commit -m "chore: update NIF checksum for $TAG"
           git push
