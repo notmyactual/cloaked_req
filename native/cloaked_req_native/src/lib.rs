@@ -578,7 +578,7 @@ mod tests {
             serde_json::from_slice(&body).expect("response body must be JSON");
 
         assert!(payload.get("ja4").and_then(|v| v.as_str()).is_some());
-        assert!(payload.get("ja3").and_then(|v| v.as_str()).is_some());
+        assert!(payload.get("ja4_r").and_then(|v| v.as_str()).is_some());
     }
 
     #[test]

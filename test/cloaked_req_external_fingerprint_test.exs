@@ -27,7 +27,7 @@ defmodule CloakedReq.ExternalFingerprintTest do
     assert plain_fingerprint != impersonated_fingerprint
   end
 
-  test "impersonated request returns JA3 and JA4 fingerprints" do
+  test "impersonated request returns JA4 fingerprints" do
     response =
       [url: @fingerprint_url]
       |> Req.new()
@@ -36,8 +36,8 @@ defmodule CloakedReq.ExternalFingerprintTest do
 
     assert response.status in 200..299
     payload = decode_body(response)
-    assert is_binary(payload["ja3"]) and payload["ja3"] != ""
     assert is_binary(payload["ja4"]) and payload["ja4"] != ""
+    assert is_binary(payload["ja4_r"]) and payload["ja4_r"] != ""
   end
 
   @spec fetch_fingerprint(Req.Request.t()) :: String.t() | nil
