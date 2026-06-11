@@ -32,6 +32,28 @@ defmodule CloakedReq.Native do
   end
 
   @doc """
+  Evicts every cached client in the given pool group.
+
+  Closes that group's idle pooled connections so the next request in the group
+  builds a fresh client and dials a new connection. Returns `:ok`.
+  """
+  @spec drop_pool_group(binary()) :: :ok
+  def drop_pool_group(group) when is_binary(group) do
+    nif_drop_pool_group(group)
+  end
+
+  @doc """
+  Clears the entire client cache, closing all idle pooled connections.
+
+  Returns `:ok`. Affects every pool group; use `drop_pool_group/1` to reset a
+  single group without disturbing the others.
+  """
+  @spec flush_pool() :: :ok
+  def flush_pool do
+    nif_flush_pool()
+  end
+
+  @doc """
   Sends the request metadata and body to the Rust NIF.
 
   The metadata map is passed directly to the NIF (decoded via Rustler's NifMap).
@@ -135,4 +157,6 @@ defmodule CloakedReq.Native do
 
   defp nif_create_cookie_jar, do: :erlang.nif_error(:nif_not_loaded)
   defp nif_perform_request(_payload, _body, _token, _cookie_jar_ref), do: :erlang.nif_error(:nif_not_loaded)
+  defp nif_drop_pool_group(_group), do: :erlang.nif_error(:nif_not_loaded)
+  defp nif_flush_pool, do: :erlang.nif_error(:nif_not_loaded)
 end

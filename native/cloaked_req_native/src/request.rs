@@ -32,6 +32,8 @@ pub struct NativeRequest {
     pub max_body_size_bytes: Option<u64>,
     #[serde(default)]
     pub local_address: Option<String>,
+    #[serde(default)]
+    pub pool_group: Option<String>,
 }
 
 #[cfg(test)]
@@ -101,6 +103,34 @@ mod tests {
         assert!(request.insecure_skip_verify);
         assert_eq!(request.max_body_size_bytes, Some(10_485_760));
         assert!(request.local_address.is_none());
+        assert!(request.pool_group.is_none());
+    }
+
+    #[test]
+    fn deserializes_pool_group() {
+        let request: NativeRequest = serde_json::from_str(
+            r#"{
+              "method": "GET",
+              "url": "https://example.com",
+              "pool_group": "worker_3"
+            }"#,
+        )
+        .expect("request should deserialize");
+
+        assert_eq!(request.pool_group.as_deref(), Some("worker_3"));
+    }
+
+    #[test]
+    fn pool_group_defaults_to_none() {
+        let request: NativeRequest = serde_json::from_str(
+            r#"{
+              "method": "GET",
+              "url": "https://example.com"
+            }"#,
+        )
+        .expect("request should deserialize");
+
+        assert!(request.pool_group.is_none());
     }
 
     #[test]

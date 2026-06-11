@@ -38,11 +38,14 @@ static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
         .expect("tokio runtime must initialize")
 });
 
-/// Cache key for a built `Client`. Proxy and source IP are applied per request
-/// (wreq's connection pool keys on both, so connections are never shared across
-/// them), so they stay out of the key. What remains is bounded by an LRU because
-/// `connect_timeout_ms` is caller-controlled.
-type ClientKey = (Option<String>, bool, u64);
+/// Cache key for a built `Client`. The leading dimension is the caller-supplied
+/// `pool_group`: an opaque token that scopes pooled connections to a logical
+/// identity (e.g. one worker) so `drop_pool_group` can evict just that scope.
+/// Proxy and source IP are applied per request (wreq's connection pool keys on
+/// both, so connections are never shared across them), so they stay out of the
+/// key. What remains is bounded by an LRU because `pool_group` and
+/// `connect_timeout_ms` are caller-controlled.
+type ClientKey = (Option<String>, Option<String>, bool, u64);
 
 const CLIENT_CACHE_CAP: usize = 128;
 
@@ -130,16 +133,48 @@ where
     }
 }
 
+/// Builds the `CLIENT_CACHE` key for a request's pool-affecting parameters.
+fn client_key(
+    pool_group: Option<&str>,
+    emulation: Option<&str>,
+    insecure_skip_verify: bool,
+    connect_timeout_ms: u64,
+) -> ClientKey {
+    (
+        pool_group.map(str::to_string),
+        emulation.map(str::to_string),
+        insecure_skip_verify,
+        connect_timeout_ms,
+    )
+}
+
+/// Removes every cached `Client` whose `pool_group` matches `group`, returning
+/// how many were evicted. Dropping the entry releases this side's `Client`
+/// `Arc`; in-flight requests holding a clone finish normally, the now-idle
+/// keep-alive connections close, and the next request in that group builds a
+/// fresh `Client` (and therefore a fresh connection). Scoped by group so one
+/// identity's reset never disturbs another's pooled connections.
+fn drop_group_in(cache: &mut LruCache<ClientKey, Client>, group: &str) -> usize {
+    let doomed: Vec<ClientKey> = cache
+        .iter()
+        .filter(|(key, _)| key.0.as_deref() == Some(group))
+        .map(|(key, _)| key.clone())
+        .collect();
+
+    let dropped = doomed.len();
+    for key in doomed {
+        cache.pop(&key);
+    }
+    dropped
+}
+
 fn get_or_build_client(
+    pool_group: Option<&str>,
     emulation: Option<&str>,
     insecure_skip_verify: bool,
     connect_timeout_ms: u64,
 ) -> Result<Client, NativeError> {
-    let key = (
-        emulation.map(|s| s.to_string()),
-        insecure_skip_verify,
-        connect_timeout_ms,
-    );
+    let key = client_key(pool_group, emulation, insecure_skip_verify, connect_timeout_ms);
 
     {
         let mut cache = CLIENT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
@@ -238,6 +273,25 @@ fn nif_create_cookie_jar() -> ResourceArc<CookieJarResource> {
     ResourceArc::new(CookieJarResource {
         jar: wreq::cookie::Jar::default(),
     })
+}
+
+/// Evicts every cached `Client` in the given `pool_group`, closing its idle
+/// pooled connections so the next request in that group dials a fresh one.
+#[rustler::nif]
+fn nif_drop_pool_group(group: String) -> rustler::Atom {
+    let mut cache = CLIENT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    drop_group_in(&mut cache, &group);
+    ok()
+}
+
+/// Clears the entire client cache, closing all idle pooled connections.
+#[rustler::nif]
+fn nif_flush_pool() -> rustler::Atom {
+    CLIENT_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
+    ok()
 }
 
 #[rustler::nif]
@@ -380,6 +434,7 @@ async fn execute_request_async(
     cookie_jar: Option<ResourceArc<CookieJarResource>>,
 ) -> Result<(NativeResponseMeta, Vec<u8>), NativeError> {
     let client = get_or_build_client(
+        request.pool_group.as_deref(),
         request.emulation.as_deref(),
         request.insecure_skip_verify,
         request.connect_timeout_ms,
@@ -622,6 +677,7 @@ mod tests {
             insecure_skip_verify: false,
             max_body_size_bytes: None,
             local_address: None,
+            pool_group: None,
         }
     }
 
@@ -767,6 +823,7 @@ mod tests {
             insecure_skip_verify: false,
             max_body_size_bytes: None,
             local_address: None,
+            pool_group: None,
         };
 
         let (meta, body) =
@@ -1009,7 +1066,7 @@ mod tests {
         for i in 0..(CLIENT_CACHE_CAP + 50) {
             let _ = build_client(None, false, 900_000 + i as u64).map(|client| {
                 let mut cache = CLIENT_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-                cache.put((None, false, 900_000 + i as u64), client);
+                cache.put((None, None, false, 900_000 + i as u64), client);
             });
         }
 
@@ -1018,6 +1075,58 @@ mod tests {
             len <= CLIENT_CACHE_CAP,
             "cache grew to {len}, expected at most {CLIENT_CACHE_CAP}"
         );
+    }
+
+    #[test]
+    fn client_key_scopes_by_pool_group() {
+        let a = client_key(Some("worker_a"), Some("chrome_136"), false, 5_000);
+        let b = client_key(Some("worker_b"), Some("chrome_136"), false, 5_000);
+
+        // Same profile/insecure/timeout, different pool_group → distinct keys,
+        // so each logical identity gets its own pooled Client.
+        assert_ne!(a, b);
+        assert_eq!(a.0.as_deref(), Some("worker_a"));
+
+        // pool_group is the leading dimension and defaults to None.
+        let unscoped = client_key(None, Some("chrome_136"), false, 5_000);
+        assert_eq!(unscoped.0, None);
+        assert_ne!(unscoped, a);
+    }
+
+    #[test]
+    fn drop_group_in_evicts_only_matching_group() {
+        let mut cache: LruCache<ClientKey, Client> =
+            LruCache::new(NonZeroUsize::new(8).expect("cap is non-zero"));
+
+        let client = build_client(None, false, 30_000).expect("client builds");
+        cache.put((Some("worker_a".into()), None, false, 30_000), client.clone());
+        cache.put(
+            (Some("worker_a".into()), Some("chrome_136".into()), false, 30_000),
+            client.clone(),
+        );
+        cache.put((Some("worker_b".into()), None, false, 30_000), client.clone());
+        cache.put((None, None, false, 30_000), client);
+
+        let dropped = drop_group_in(&mut cache, "worker_a");
+
+        assert_eq!(dropped, 2, "both worker_a entries should be evicted");
+        assert!(!cache.iter().any(|(k, _)| k.0.as_deref() == Some("worker_a")));
+        assert!(cache.iter().any(|(k, _)| k.0.as_deref() == Some("worker_b")));
+        assert!(cache.iter().any(|(k, _)| k.0.is_none()));
+        assert_eq!(cache.len(), 2);
+    }
+
+    #[test]
+    fn drop_group_in_is_noop_for_unknown_group() {
+        let mut cache: LruCache<ClientKey, Client> =
+            LruCache::new(NonZeroUsize::new(8).expect("cap is non-zero"));
+        let client = build_client(None, false, 30_000).expect("client builds");
+        cache.put((Some("present".into()), None, false, 30_000), client);
+
+        let dropped = drop_group_in(&mut cache, "absent");
+
+        assert_eq!(dropped, 0);
+        assert_eq!(cache.len(), 1);
     }
 
     // --- Cookie domain safety tests ---

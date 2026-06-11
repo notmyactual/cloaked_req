@@ -37,21 +37,39 @@ defmodule CloakedReq.Request do
          {:ok, insecure_skip_verify} <-
            normalize_insecure_skip_verify(get_option(request, :insecure_skip_verify, false)),
          {:ok, local_address} <-
-           normalize_local_address(get_option(request, :local_address)) do
-      {:ok,
-       {%{
-          method: request.method |> Atom.to_string() |> String.upcase(),
-          url: URI.to_string(request.url),
-          headers: flat_headers,
-          receive_timeout_ms: receive_timeout,
-          connect_timeout_ms: connect_options.timeout,
-          proxy: connect_options.proxy,
+           normalize_local_address(get_option(request, :local_address)),
+         {:ok, pool_group} <-
+           normalize_pool_group(get_option(request, :pool_group)) do
+      metadata =
+        native_metadata(request, flat_headers, %{
+          receive_timeout: receive_timeout,
+          connect_options: connect_options,
           emulation: emulation,
           insecure_skip_verify: insecure_skip_verify,
-          max_body_size_bytes: max_body_size,
-          local_address: local_address
-        }, body}}
+          max_body_size: max_body_size,
+          local_address: local_address,
+          pool_group: pool_group
+        })
+
+      {:ok, {metadata, body}}
     end
+  end
+
+  @spec native_metadata(Req.Request.t(), [{String.t(), String.t()}], map()) :: map()
+  defp native_metadata(request, flat_headers, normalized) do
+    %{
+      method: request.method |> Atom.to_string() |> String.upcase(),
+      url: URI.to_string(request.url),
+      headers: flat_headers,
+      receive_timeout_ms: normalized.receive_timeout,
+      connect_timeout_ms: normalized.connect_options.timeout,
+      proxy: normalized.connect_options.proxy,
+      emulation: normalized.emulation,
+      insecure_skip_verify: normalized.insecure_skip_verify,
+      max_body_size_bytes: normalized.max_body_size,
+      local_address: normalized.local_address,
+      pool_group: normalized.pool_group
+    }
   end
 
   @spec validate_into(Req.Request.t()) :: :ok | {:error, Error.t()}
@@ -260,5 +278,14 @@ defmodule CloakedReq.Request do
       {:error, _} -> {:error, Error.new(:invalid_request, "local_address is not a valid IP address")}
       charlist -> {:ok, List.to_string(charlist)}
     end
+  end
+
+  @spec normalize_pool_group(term()) :: {:ok, nil | String.t()} | {:error, Error.t()}
+  defp normalize_pool_group(nil), do: {:ok, nil}
+  defp normalize_pool_group(value) when is_binary(value), do: {:ok, value}
+  defp normalize_pool_group(value) when is_atom(value), do: {:ok, Atom.to_string(value)}
+
+  defp normalize_pool_group(_value) do
+    {:error, Error.new(:invalid_request, "pool_group must be a string or atom")}
   end
 end

@@ -13,7 +13,7 @@ defmodule CloakedReq do
   alias CloakedReq.Request
   alias CloakedReq.Response
 
-  @custom_req_options [:cookie_jar, :impersonate, :insecure_skip_verify, :local_address, :max_body_size]
+  @custom_req_options [:cookie_jar, :impersonate, :insecure_skip_verify, :local_address, :max_body_size, :pool_group]
 
   @doc """
   Attaches `CloakedReq` adapter behavior to an existing `Req.Request`.
@@ -28,6 +28,9 @@ defmodule CloakedReq do
   - `:max_body_size` - positive integer or `:unlimited` (default: 10 MB); caps
     both the request body (rejected before sending if larger) and the response
     body (truncated to an error once it exceeds the limit)
+  - `:pool_group` - opaque token (binary or atom, default `nil`) scoping the
+    connection pool to a logical identity; pair with `drop_pool_group/1` to reset
+    a single scope on demand
 
   ## Examples
 
@@ -62,6 +65,54 @@ defmodule CloakedReq do
     |> register_options()
     |> Req.Request.put_option(:impersonate, profile)
     |> put_adapter()
+  end
+
+  @doc """
+  Drops every pooled connection scoped to `group`.
+
+  Evicts the cached client for the given `:pool_group` so the next request in
+  that group dials a fresh connection. Use this when the upstream identity behind
+  a fixed proxy has rotated and the pooled keep-alive connections would otherwise
+  keep reusing the previous identity.
+
+  In-flight requests are not aborted; each holds its own client until it finishes.
+  The effect is that subsequent requests in this group start from an empty pool.
+  `group` is a binary or atom matching the `:pool_group` request option.
+
+  Returns `:ok`.
+
+  ## Examples
+
+      req =
+        Req.new(url: "https://example.com")
+        |> CloakedReq.attach(impersonate: :chrome_136, pool_group: "worker_3")
+
+      # ... after the upstream identity rotates:
+      CloakedReq.drop_pool_group("worker_3")
+  """
+  @spec drop_pool_group(binary() | atom()) :: :ok
+  def drop_pool_group(group) when is_binary(group) do
+    Native.drop_pool_group(group)
+  end
+
+  def drop_pool_group(group) when is_atom(group) and not is_nil(group) do
+    group |> Atom.to_string() |> Native.drop_pool_group()
+  end
+
+  @doc """
+  Flushes the entire client cache, dropping all pooled connections.
+
+  The global counterpart to `drop_pool_group/1`: every cached client is evicted
+  and all idle pooled connections close, so the next request anywhere builds a
+  fresh client. In-flight requests are not aborted. For multi-group callers,
+  prefer `drop_pool_group/1` so resetting one group does not disturb another
+  group's pooled connections.
+
+  Returns `:ok`.
+  """
+  @spec flush_pool() :: :ok
+  def flush_pool do
+    Native.flush_pool()
   end
 
   @doc false
