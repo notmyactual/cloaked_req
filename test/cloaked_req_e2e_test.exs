@@ -214,6 +214,31 @@ defmodule CloakedReq.E2ETest do
     assert peer_ip == {127, 0, 0, 1}
   end
 
+  test "pool_group request succeeds and survives a drop_pool_group" do
+    response = TestServer.build_response(200, [{"content-type", "text/plain"}], "scoped")
+    {url, _server} = TestServer.start(response: response)
+
+    req =
+      [url: url, retry: false]
+      |> Req.new()
+      |> CloakedReq.attach(pool_group: "worker_e2e")
+
+    assert {:ok, %Req.Response{status: 200, body: "scoped"}} = Req.request(req)
+
+    # Dropping the group evicts its cached client; the next request in the same
+    # group must rebuild cleanly and dial a fresh connection.
+    assert CloakedReq.drop_pool_group("worker_e2e") == :ok
+
+    {url2, _server2} = TestServer.start(response: response)
+
+    req2 =
+      [url: url2, retry: false]
+      |> Req.new()
+      |> CloakedReq.attach(pool_group: "worker_e2e")
+
+    assert {:ok, %Req.Response{status: 200, body: "scoped"}} = Req.request(req2)
+  end
+
   test "response includes url in private metadata" do
     response = TestServer.build_response(200, [{"content-type", "text/plain"}], "ok")
     {url, _server} = TestServer.start(response: response)

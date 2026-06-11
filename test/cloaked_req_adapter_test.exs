@@ -450,6 +450,50 @@ defmodule CloakedReq.AdapterTest do
   end
 
   # -------------------------------------------------------------------
+  # pool_group option
+  # -------------------------------------------------------------------
+
+  test "nil pool_group produces nil in payload" do
+    request =
+      [url: "https://example.com"]
+      |> Req.new()
+      |> CloakedReq.attach()
+
+    assert {:ok, {payload, _body}} = Request.to_native_payload(request)
+    assert payload[:pool_group] == nil
+  end
+
+  test "binary pool_group is passed through" do
+    request =
+      [url: "https://example.com"]
+      |> Req.new()
+      |> CloakedReq.attach(pool_group: "worker_3")
+
+    assert {:ok, {payload, _body}} = Request.to_native_payload(request)
+    assert payload[:pool_group] == "worker_3"
+  end
+
+  test "atom pool_group is normalized to string" do
+    request =
+      [url: "https://example.com"]
+      |> Req.new()
+      |> CloakedReq.attach(pool_group: :worker_3)
+
+    assert {:ok, {payload, _body}} = Request.to_native_payload(request)
+    assert payload[:pool_group] == "worker_3"
+  end
+
+  test "non-string/non-atom pool_group returns error" do
+    request =
+      [url: "https://example.com"]
+      |> Req.new()
+      |> CloakedReq.attach(pool_group: 123)
+
+    assert {:error, %Error{type: :invalid_request, message: "pool_group must be a string or atom"}} =
+             Request.to_native_payload(request)
+  end
+
+  # -------------------------------------------------------------------
   # Cookie jar option validation
   # -------------------------------------------------------------------
 
