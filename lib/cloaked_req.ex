@@ -30,7 +30,10 @@ defmodule CloakedReq do
     body (truncated to an error once it exceeds the limit)
   - `:pool_group` - opaque token (binary or atom, default `nil`) scoping the
     connection pool to a logical identity; pair with `drop_pool_group/1` to reset
-    a single scope on demand
+    a single scope on demand. Use a low-cardinality, stable identity (e.g. a
+    worker name): a value that varies per request defeats connection reuse and,
+    once the 128-entry client cache fills, evicts other groups' pooled
+    connections
 
   ## Examples
 
@@ -77,7 +80,10 @@ defmodule CloakedReq do
 
   In-flight requests are not aborted; each holds its own client until it finishes.
   The effect is that subsequent requests in this group start from an empty pool.
-  `group` is a binary or atom matching the `:pool_group` request option.
+
+  `group` is a binary or atom matching the `:pool_group` request option. `nil`
+  and any other type raise `ArgumentError`; there is no scoped drop for the
+  default (unscoped) pool — use `flush_pool/0` to reset it.
 
   Returns `:ok`.
 
@@ -97,6 +103,11 @@ defmodule CloakedReq do
 
   def drop_pool_group(group) when is_atom(group) and not is_nil(group) do
     group |> Atom.to_string() |> Native.drop_pool_group()
+  end
+
+  def drop_pool_group(other) do
+    raise ArgumentError,
+          "drop_pool_group/1 expects a non-nil binary or atom matching a :pool_group, got: #{inspect(other)}"
   end
 
   @doc """

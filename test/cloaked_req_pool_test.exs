@@ -21,6 +21,18 @@ defmodule CloakedReq.PoolTest do
     assert CloakedReq.drop_pool_group(:worker_1) == :ok
   end
 
+  test "drop_pool_group/1 raises ArgumentError for nil" do
+    assert_raise ArgumentError, ~r/non-nil binary or atom/, fn ->
+      CloakedReq.drop_pool_group(nil)
+    end
+  end
+
+  test "drop_pool_group/1 raises ArgumentError for a non-binary/non-atom group" do
+    assert_raise ArgumentError, ~r/non-nil binary or atom/, fn ->
+      CloakedReq.drop_pool_group(123)
+    end
+  end
+
   test "Native.flush_pool/0 returns :ok" do
     assert Native.flush_pool() == :ok
   end
