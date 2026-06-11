@@ -235,7 +235,7 @@ jobs:
         run: sha256sum *.tar.gz | tee SHA256SUMS
 
       - name: Create release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1 # zizmor: ignore[superfluous-actions] action handles release asset upload and notes generation beyond a plain gh release call
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0 # zizmor: ignore[superfluous-actions] action handles release asset upload and notes generation beyond a plain gh release call
         with:
           tag_name: ${{ needs.detect.outputs.tag }}
           target_commitish: main
