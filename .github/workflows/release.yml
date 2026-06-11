@@ -93,12 +93,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Build the Linux NIFs on Ubuntu 22.04 (glibc 2.35). glibc is backward-
+          # but not forward-compatible, so a 2.35-linked binary runs on any host
+          # with glibc >= 2.35 — including Debian bookworm (2.36) and newer.
+          # Building on ubuntu-latest (24.04, glibc 2.39) would not run on bookworm.
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             lib_prefix: lib
             lib_ext: so
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             lib_prefix: lib
             lib_ext: so
           - target: aarch64-apple-darwin
@@ -142,8 +146,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             native/cloaked_req_native/target
-          key: release-${{ matrix.target }}-${{ hashFiles('native/cloaked_req_native/Cargo.lock') }}
-          restore-keys: release-${{ matrix.target }}-
+          key: release-${{ matrix.runner }}-${{ matrix.target }}-${{ hashFiles('native/cloaked_req_native/Cargo.lock') }}
+          restore-keys: release-${{ matrix.runner }}-${{ matrix.target }}-
 
       - name: Build NIF
         working-directory: native/cloaked_req_native

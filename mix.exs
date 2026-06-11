@@ -1,7 +1,7 @@
 defmodule CloakedReq.MixProject do
   use Mix.Project
 
-  @version "0.4.2-poolgroup"
+  @version "0.4.2-poolgroup.2"
 
   @spec project() :: keyword()
   def project do
