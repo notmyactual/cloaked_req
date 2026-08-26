@@ -9,7 +9,7 @@ defmodule CloakedReq.Native do
   use RustlerPrecompiled,
     otp_app: :cloaked_req,
     crate: "cloaked_req_native",
-    base_url: "https://github.com/rubas/cloaked_req/releases/download/v#{Mix.Project.config()[:version]}",
+    base_url: "https://github.com/notmyactual/cloaked_req/releases/download/v#{Mix.Project.config()[:version]}",
     version: Mix.Project.config()[:version],
     force_build: System.get_env("CLOAKED_REQ_BUILD") in ["1", "true"],
     nif_versions: ["2.17"],
