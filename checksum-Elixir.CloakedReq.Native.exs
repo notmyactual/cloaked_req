@@ -1,8 +1,5 @@
 %{
-  "libcloaked_req_native-v0.5.1-nif-2.17-aarch64-apple-darwin.so.tar.gz" =>
-    "sha256:cdf1e0a262e92bc772399627c02ea447b893d4a5ca16f98f3ba6c688e1e937be",
-  "libcloaked_req_native-v0.5.1-nif-2.17-aarch64-unknown-linux-gnu.so.tar.gz" =>
-    "sha256:32b4d10d22a42b16c02c81d649e4d761d4ea9abbcb5a444ace3628cd1f6b7282",
-  "libcloaked_req_native-v0.5.1-nif-2.17-x86_64-unknown-linux-gnu.so.tar.gz" =>
-    "sha256:2f20fd5bd7e7ed147dd8b3d4e4662753c45907104e9db0c7659df6bd44d63392"
+  "libcloaked_req_native-v0.5.1-nif-2.17-aarch64-apple-darwin.so.tar.gz" => "sha256:87e71191afbdf650d392208fda21d72179357d69458f84415c422b8ff7a87a60",
+  "libcloaked_req_native-v0.5.1-nif-2.17-aarch64-unknown-linux-gnu.so.tar.gz" => "sha256:0f06a18b5cf6d966e0e6c0c850f106adad1c76596b12aeb53d30e5e15f04b7a8",
+  "libcloaked_req_native-v0.5.1-nif-2.17-x86_64-unknown-linux-gnu.so.tar.gz" => "sha256:518aaf64fa3515e1b1e6610414b1f84b2f0a469ccedb0246ceb2ce351b316896",
 }
